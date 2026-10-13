@@ -128,3 +128,8 @@ button,input,select{font-family:inherit}
 #toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:12px 20px;border-radius:99px;font-weight:700;font-size:14px;opacity:0;transition:.3s;z-index:99;max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media(min-width:600px){body{padding-bottom:110px}.hero h1{font-size:32px}}
+.ocr-edit{background:#fff;border:1.5px solid #cde5e3;border-radius:16px;padding:12px;margin-bottom:10px;font-size:13px;font-weight:700}
+.ai-box{background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:18px;padding:14px;margin-top:14px;font-size:13.5px;line-height:2}
+.ai-box summary{font-weight:900;cursor:pointer;font-size:15px}
+.ai-box ol{margin-right:18px}
+.ai-badge{margin-top:8px;font-weight:900;background:#ede9fe;border-radius:99px;padding:6px 14px;display:inline-block}

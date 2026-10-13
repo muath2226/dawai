@@ -122,39 +122,146 @@ $('#demoBtn').onclick = ()=>{
   toast('هذه نتيجة تجريبية — جرّب التصوير الحقيقي 📷');
 };
 
+// توحيد النص العربي للمطابقة (أ/إ/آ→ا، ة→ه، ى→ي، إزالة التشكيل)
+function norm(s){
+  return (s||'').toLowerCase()
+    .replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي')
+    .replace(/[\u064B-\u0652]/g,'').replace(/\s+/g,' ').trim();
+}
+
+// تحسين الصورة قبل OCR: تكبير + رمادي + تباين (يرفع الدقة كثيراً)
+function prepImage(imgUrl){
+  return new Promise(res=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const w = Math.min(img.width*2, 2000);
+      const h = Math.round(w*img.height/img.width);
+      const c = document.createElement('canvas'); c.width=w; c.height=h;
+      const x = c.getContext('2d');
+      x.drawImage(img,0,0,w,h);
+      const d = x.getImageData(0,0,w,h), p = d.data;
+      for(let i=0;i<p.length;i+=4){
+        let g = .299*p[i]+.587*p[i+1]+.114*p[i+2];
+        g = g<150 ? Math.max(0,g-40) : Math.min(255,g+40); // تباين
+        p[i]=p[i+1]=p[i+2]=g;
+      }
+      x.putImageData(d,0,0);
+      res(c.toDataURL('image/jpeg',.9));
+    };
+    img.onerror = ()=>res(imgUrl);
+    img.src = imgUrl;
+  });
+}
+
 async function analyzeImage(imgUrl){
   const box=$('#ocrStatus'); box.hidden=false; box.textContent='🔍 جارٍ قراءة الاسم من الصورة...';
   $('#result').innerHTML='';
+  // 1) إن وُجد مفتاح ذكاء اصطناعي → تعرّف شامل على أي دواء
+  const key = localStorage.getItem('gemini_key')||'';
+  if(key){
+    box.textContent='🤖 الذكاء الاصطناعي يحلل الصورة...';
+    const ai = await geminiIdentify(imgUrl, key).catch(()=>null);
+    if(ai){ renderAiResult(ai); return; }
+    box.textContent='تعثر الذكاء الاصطناعي — أجرب القراءة المحلية...';
+  }
+  // 2) OCR محلي + مطابقة القاعدة
   try{
-    const { data:{ text } } = await Tesseract.recognize(imgUrl, 'ara+eng', {logger:m=>{ if(m.status==='recognizing text') box.textContent=`🔍 تحليل... ${Math.round(m.progress*100)}%`; }});
+    const ready = await prepImage(imgUrl);
+    const { data:{ text } } = await Tesseract.recognize(ready, 'ara+eng', {logger:m=>{ if(m.status==='recognizing text') box.textContent=`🔍 تحليل... ${Math.round(m.progress*100)}%`; }});
     const clean = text.replace(/\s+/g,' ').trim().slice(0,120);
     box.textContent = clean ? `📝 النص المرصود: "${clean}"` : 'لم يُرصد نص واضح';
-    const found = matchDrug(text);
-    if(found){
-      $('#result').innerHTML = drugCard(found, 'تم التعرف عليه من الصورة ✅');
-      toast('تم التعرف على الدواء ✅');
-    }else{
-      $('#result').innerHTML = `<div class="no-match">😕 لم نتعرف على الدواء من النص: "<b>${clean||'—'}</b>"<br><small>تأكد من وضوح الاسم والإضاءة، أو ابحث يدوياً</small><br><br><button class="btn-primary" onclick="go('search')">🔍 بحث يدوي</button></div>`;
-    }
+    renderOcrResult(text, clean);
   }catch(e){
     box.textContent='تعذر التحليل — تحقق من الإنترنت ( OCR يحتاج اتصال أول مرة )';
-    const found = DRUGS[0];
-    $('#result').innerHTML = drugCard(found, 'نتيجة تجريبية (تعذر OCR)');
+    $('#result').innerHTML = `<div class="no-match">📝 اكتب اسم الدواء يدوياً:<br><br>
+      <input id="manualName" class="search-box" placeholder="مثال: فيفادول">
+      <button class="btn-primary" style="margin-top:8px" onclick="manualSearch()">🔍 ابحث</button></div>`;
   }
   $('#result').scrollIntoView({behavior:'smooth'});
 }
+
+// يعرض نتيجة OCR مع إمكانية تصحيح النص ثم البحث
+function renderOcrResult(text, clean){
+  const found = matchDrug(text);
+  const editBox = `<div class="ocr-edit">
+      <label>📝 النص المقروء (صحّحه إن كان ناقصاً ثم ابحث):</label>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input id="ocrText" class="search-box" value="${(clean||'').replace(/"/g,'')}">
+        <button class="btn-primary" style="width:auto;white-space:nowrap" onclick="manualSearch('ocrText')">🔍</button>
+      </div>
+    </div>`;
+  if(found){
+    $('#result').innerHTML = editBox + drugCard(found, 'تم التعرف عليه من الصورة ✅');
+    toast('تم التعرف على الدواء ✅');
+  }else{
+    $('#result').innerHTML = editBox + `<div class="no-match">😕 لم أجد "<b>${clean||'—'}</b>" في القاعدة المحلية (${DRUGS.length} دواءً)<br>
+      <small>• صحّح النص بالأعلى واضغط 🔍<br>• أو فعّل <b>التعرف الشامل بالذكاء الاصطناعي</b> بالأسفل ليتعرف على أي دواء</small><br><br>
+      <button class="btn-primary" onclick="go('search')">🔍 بحث يدوي</button></div>`;
+  }
+}
+window.manualSearch = (inputId)=>{
+  const q = inputId ? $('#'+inputId).value : $('#manualName').value;
+  const found = matchDrug(q);
+  if(found){ $('#result').innerHTML = drugCard(found, 'تم التعرف عليه ✅'); }
+  else { go('search'); $('#searchInput').value=q; renderSearch(q); toast('انقلت للبحث اليدوي 🔍'); }
+};
+
+// تعرّف شامل عبر Gemini Vision (يتعرف على أي دواء + يولّد البطاقة)
+async function geminiIdentify(imgUrl, key){
+  const base64 = imgUrl.split(',')[1];
+  const prompt = `انظر لصورة علبة الدواء هذه. أعد JSON فقط بهذا الشكل (بدون أي نص إضافي):
+{"trade":"الاسم التجاري","sci":"المادة الفعالة والتركيز","type":"النوع مثل: مسكن، مضاد حيوي، خافض ضغط","benefits":["فائدة1 قصيرة","فائدة2","فائدة3"],"cons":["مانع1 قصير","مانع2","مانع3"]}
+إن لم تكن الصورة لدواء أعد: {"error":"not a drug"}`;
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:'image/jpeg',data:base64}}]}]})
+  });
+  if(!r.ok) throw 0;
+  const j = await r.json();
+  const txt = (j.candidates?.[0]?.content?.parts?.[0]?.text||'').replace(/```json|```/g,'').trim();
+  const o = JSON.parse(txt);
+  if(o.error || !o.trade) throw 0;
+  o.benefits=(o.benefits||[]).slice(0,3); o.cons=(o.cons||[]).slice(0,3);
+  return o;
+}
+function renderAiResult(o){
+  const d = {trade:o.trade, sci:o.sci||'—', type:o.type||'دواء', icon:'🤖', benefits:o.benefits, cons:o.cons};
+  $('#ocrStatus').textContent='🤖 تم التعرف بالذكاء الاصطناعي ✅';
+  $('#result').innerHTML = drugCard(d, 'تعرف شامل بالذكاء الاصطناعي 🤖');
+  $('#result').scrollIntoView({behavior:'smooth'});
+  toast('تم التعرف على الدواء بالذكاء الاصطناعي ✅');
+}
+// حفظ مفتاح Gemini (مجاني) من صفحة التصوير
+function saveGeminiKey(){
+  const v = $('#geminiKey').value.trim();
+  if(v){ localStorage.setItem('gemini_key', v); toast('تم تفعيل التعرف الشامل 🤖✅'); }
+  else { localStorage.removeItem('gemini_key'); toast('تم إيقاف الذكاء الاصطناعي'); }
+  updateAiBadge();
+}
+function updateAiBadge(){
+  const on = !!(localStorage.getItem('gemini_key'));
+  const b = $('#aiBadge'); if(b) b.textContent = on ? '🤖 التعرف الشامل: مفعّل ✅' : '🤖 التعرف الشامل: متوقف';
+}
+
 function matchDrug(text){
   if(!text) return null;
-  const t = text.toLowerCase();
+  const t = norm(text);
+  if(!t) return null;
   let best=null, bestScore=0;
+  const hit = (needle)=>{
+    const n = norm(needle);
+    if(!n || n.length<3) return 0;
+    if(t.includes(n)) return n.length>4?3:2;
+    // تطابق أول 5 حروف (يفيد مع أخطاء OCR)
+    if(n.length>=5 && t.includes(n.slice(0,5))) return 1;
+    return 0;
+  };
   DRUGS.forEach(d=>{
-    let s=0;
-    d.keys.forEach(k=>{
-      const kk=k.toLowerCase();
-      if(t.includes(kk)) s+= kk.length>4?3:2;
+    let s = hit(d.trade) + hit(d.sci.split(' ')[0]);
+    d.keys.forEach(k=> s += hit(k));
+    (typeof ALIASES!=='undefined' ? ALIASES : []).forEach(a=>{
+      if(a.id===d.id) a.names.forEach(n=> s += hit(n));
     });
-    // تطابق جزئي: أول 4 حروف من الاسم التجاري
-    if(t.includes(d.trade.slice(0,4))) s+=2;
     if(s>bestScore){bestScore=s;best=d;}
   });
   return bestScore>0?best:null;
@@ -243,4 +350,5 @@ $('#installBtn').onclick = async ()=>{
 };
 
 // init
-renderHome(); renderSearch(); renderMy();
+renderHome(); renderSearch(); renderMy(); updateAiBadge();
+const _gk = $('#geminiKey'); if(_gk) _gk.value = localStorage.getItem('gemini_key')||'';

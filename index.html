@@ -105,6 +105,20 @@
     </div>
 
     <div id="result"></div>
+
+    <details class="ai-box">
+      <summary>🤖 التعرف الشامل على أي دواء (اختياري)</summary>
+      <p>القاعدة المحلية تعرف <b>48 دواءً</b> فقط. للتعرّف على <b>أي دواء</b> بالذكاء الاصطناعي (مجاني من Google):</p>
+      <ol>
+        <li>افتح <b>Google AI Studio</b> وأنشئ مفتاحاً مجانياً</li>
+        <li>الصقه هنا واحفظه (يبقى على جوالك فقط)</li>
+      </ol>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input id="geminiKey" type="password" class="search-box" placeholder="الصق مفتاح Gemini هنا">
+        <button class="btn-primary" style="width:auto;white-space:nowrap" onclick="saveGeminiKey()">حفظ</button>
+      </div>
+      <div id="aiBadge" class="ai-badge">🤖 التعرف الشامل: متوقف</div>
+    </details>
   </section>
 
   <!-- البحث -->
