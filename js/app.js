@@ -42,11 +42,26 @@ function drugCard(d, badge){
   </div>`;
 }
 
-// الرئيسية: chips + cards
-function renderHome(){
-  $('#homeChips').innerHTML = DRUGS.map(d=>`<button class="chip" onclick="showDrug(${d.id})">${d.icon} ${d.trade}</button>`).join('');
-  $('#homeCards').innerHTML = DRUGS.slice(0,3).map(d=>drugCard(d)).join('');
+// الرئيسية: تصنيفات + chips + cards
+const CATS = {
+  all:  ()=>true,
+  heart:   d=>[4,8,11,13,14,15,16,17,18,19,20,21,22].includes(d.id),
+  sugar:   d=>[5,23,24,25,26,27,28].includes(d.id),
+  bones:   d=>[2,10,29,30,31,32,33,34].includes(d.id),
+  stomach: d=>[3,6,35,36,37,38,39,40,41].includes(d.id),
+  kidney:  d=>[16,42,43,44,45].includes(d.id),
+  liver:   d=>[46,47,48].includes(d.id)
+};
+let curCat = 'all';
+function renderHome(cat){
+  if(cat) curCat = cat;
+  const list = DRUGS.filter(CATS[curCat]);
+  document.querySelectorAll('#catRow .cat').forEach(b=>b.classList.toggle('active', b.dataset.cat===curCat));
+  $('#drugCount').textContent = `(${list.length} دواء)`;
+  $('#homeChips').innerHTML = list.map(d=>`<button class="chip" onclick="showDrug(${d.id})">${d.icon} ${d.trade}</button>`).join('');
+  $('#homeCards').innerHTML = list.slice(0,3).map(d=>drugCard(d)).join('');
 }
+document.querySelectorAll('#catRow .cat').forEach(b=> b.onclick = ()=>{ renderHome(b.dataset.cat); });
 function showDrug(id){
   const d = DRUGS.find(x=>x.id===id);
   $('#homeCards').innerHTML = drugCard(d);
