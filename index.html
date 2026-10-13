@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>دوائي | صوّر دواءك واعرفه فوراً</title>
+<meta name="description" content="تطبيق ويب عربي: صوّر أي دواء ليتعرف عليه فوراً، واحفظ أدويتك ومواعيدها">
+<meta name="theme-color" content="#0ea5a4">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="دوائي">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+
+<div id="splash">
+  <div class="splash-logo">💊</div>
+  <div class="splash-name">دوائي</div>
+  <div class="splash-sub">صوّر .. اعرف .. التزم</div>
+</div>
+
+<header class="app-header">
+  <div class="header-inner">
+    <div class="logo">💊 <span>دوائي</span></div>
+    <button id="installBtn" class="install-btn" hidden>⬇️ تثبيت التطبيق</button>
+    <button id="notifBtn" class="icon-btn" title="تفعيل التنبيهات">🔔</button>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- الرئيسية -->
+  <section id="page-home" class="page active">
+    <div class="hero">
+      <div class="hero-text">
+        <h1>صوّر أي دواء<br><span>واعرفه فوراً ✨</span></h1>
+        <p>بدل ما تبحث أو تسأل .. وجّه الكاميرا على علبة الدواء وسنخبرك باسمه وفائدته وموانعه</p>
+      </div>
+      <div class="hero-card">
+        <div class="scan-anim">
+          <div class="pill-emoji">💊</div>
+          <div class="scan-line"></div>
+        </div>
+        <button class="btn-primary big" onclick="go('scan')">📷 صوّر دواء الآن</button>
+        <button class="btn-ghost" onclick="go('search')">🔍 أو ابحث بالاسم</button>
+      </div>
+    </div>
+
+    <h2 class="sec-title">💡 أدوية شائعة جرّبها</h2>
+    <div id="homeChips" class="chips"></div>
+    <div id="homeCards" class="cards"></div>
+
+    <div class="tip-box">
+      <b>📌 كيف يعمل؟</b>
+      <ol>
+        <li>صوّر علبة الدواء أو الشريط بوضوح</li>
+        <li>نقرأ الاسم من الصورة ونطابقه مع قاعدة البيانات</li>
+        <li>تظهر لك البطاقة + زر إضافة لجدولك</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- التصوير -->
+  <section id="page-scan" class="page">
+    <h2 class="sec-title">📷 صوّر الدواء للتعرف عليه</h2>
+
+    <div class="camera-card">
+      <video id="video" playsinline muted hidden></video>
+      <canvas id="canvas" hidden></canvas>
+      <div id="cameraPlaceholder" class="cam-placeholder">
+        <div style="font-size:52px">📦💊</div>
+        <p>وجّه الكاميرا نحو اسم الدواء<br>بإضاءة جيدة ونص واضح</p>
+      </div>
+      <img id="preview" class="preview" hidden alt="صورة الدواء">
+      <div id="ocrStatus" class="ocr-status" hidden></div>
+    </div>
+
+    <div class="btn-row">
+      <button id="startCamBtn" class="btn-primary">🎥 تشغيل الكاميرا</button>
+      <button id="captureBtn" class="btn-primary" hidden>📸 التقاط وتحليل</button>
+      <button id="stopCamBtn" class="btn-ghost" hidden>إيقاف</button>
+    </div>
+    <div class="btn-row">
+      <label class="btn-ghost file-label">🖼️ اختر صورة من الجوال
+        <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
+      </label>
+      <button id="demoBtn" class="btn-ghost">✨ تجربة بدون تصوير</button>
+    </div>
+
+    <div id="result"></div>
+  </section>
+
+  <!-- البحث -->
+  <section id="page-search" class="page">
+    <h2 class="sec-title">🔍 البحث في الأدوية</h2>
+    <input id="searchInput" class="search-box" type="search" placeholder="اكتب اسم الدواء أو المادة الفعالة... مثال: بنادول">
+    <div id="searchResults" class="cards"></div>
+  </section>
+
+  <!-- جدولي -->
+  <section id="page-my" class="page">
+    <h2 class="sec-title">🗓️ جدولي الدوائي</h2>
+
+    <div class="my-stats">
+      <div class="stat"><b id="statTotal">0</b><span>دواء</span></div>
+      <div class="stat"><b id="statToday">0</b><span>جرعة اليوم</span></div>
+      <div class="stat"><b id="statTaken">0</b><span>تم أخذها ✅</span></div>
+    </div>
+
+    <form id="addForm" class="add-form">
+      <h3>➕ إضافة دواء لجدولك</h3>
+      <input id="fName" required placeholder="اسم الدواء * مثال: بنادول">
+      <div class="form-2col">
+        <input id="fTime" type="time" required value="08:00">
+        <select id="fDose">
+          <option>حبّة واحدة</option>
+          <option>نصف حبّة</option>
+          <option>حبّتان</option>
+          <option>ملعقة (5 مل)</option>
+          <option>إبرة</option>
+          <option>حسب الوصفة</option>
+        </select>
+      </div>
+      <div class="form-2col">
+        <select id="fRepeat">
+          <option value="1">مرة يومياً</option>
+          <option value="2">مرتين يومياً</option>
+          <option value="3">3 مرات يومياً</option>
+        </select>
+        <input id="fNote" placeholder="ملاحظة: قبل/بعد الأكل">
+      </div>
+      <button class="btn-primary" type="submit">💾 حفظ في جدولي</button>
+    </form>
+
+    <div id="myList"></div>
+    <button id="clearTakenBtn" class="btn-ghost small">🧹 مسح ما تم أخذه</button>
+  </section>
+
+</main>
+
+<nav class="bottom-nav">
+  <button data-go="home" class="active">🏠<span>الرئيسية</span></button>
+  <button data-go="scan" class="scan-fab">📷<span>صوّر</span></button>
+  <button data-go="search">🔍<span>بحث</span></button>
+  <button data-go="my">🗓️<span>جدولي</span><i id="navBadge" class="badge" hidden></i></button>
+</nav>
+
+<div id="toast"></div>
+
+<script src="js/db.js"></script>
+<script src="js/app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
